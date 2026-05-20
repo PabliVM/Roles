@@ -566,7 +566,7 @@ const firebaseConfig = {
   appId: "1:224811008593:web:3fbd10854547905013ae70"
 };
 
-let db = null, useFirebase = false;
+let db = null;
 
 // =====================================================
 // STATE — keyed by seasonId
@@ -596,46 +596,26 @@ function ensureSD(sid) { if (!state.data[sid]) state.data[sid] = emptySeasonData
 // INIT
 // =====================================================
 window.addEventListener('DOMContentLoaded', async () => {
-  initDarkMode();
   initTagColorMini();
-  await loadAll();
-  hideSplash();
-  renderApp();
+  try {
+    await loadAll();
+    hideSplash();
+    renderApp();
+  } catch(e) {
+    showFirebaseError(e);
+  }
 });
 
 // =====================================================
-// LOAD
+// LOAD — Firebase only, no fallback
 // =====================================================
 async function loadAll() {
   setSplashMsg("Conectando con Firebase…");
-  // Race Firebase against a 6s timeout so splash never gets stuck
-  const firebaseLoad = (async () => {
-    const app = initializeApp(firebaseConfig);
-    db = getFirestore(app);
-    setSplashMsg("Cargando datos…");
-    await loadFromFirebase();
-  })();
-  const timeout = new Promise((_,reject) => setTimeout(() => reject(new Error('timeout')), 6000));
-  try {
-    await Promise.race([firebaseLoad, timeout]);
-    useFirebase = true;
-    setFooterStatus("🔥 Firebase");
-  } catch(e) {
-    console.warn("Firebase failed or timed out:", e);
-    db = null; useFirebase = false;
-    setSplashMsg("Cargando datos locales…");
-    loadFromLocal();
-    setFooterStatus("💾 Local");
-  }
-  if (!state.seasons.length) seedDefault();
-  const savedSeason = localStorage.getItem('rm_active_season');
-  activeSeason = state.seasons.find(s => s.id === savedSeason) || state.seasons[0];
-}
-
-async function loadFromFirebase() {
-  const [seasonSnap] = await Promise.all([getDocs(collection(db, "seasons"))]);
+  const app = initializeApp(firebaseConfig);
+  db = getFirestore(app);
+  setSplashMsg("Cargando temporadas…");
+  const seasonSnap = await getDocs(collection(db, "seasons"));
   state.seasons = seasonSnap.docs.map(d => ({id:d.id,...d.data()})).sort((a,b)=>(a.order||0)-(b.order||0));
-
   for (const season of state.seasons) {
     setSplashMsg(`Cargando ${season.name}…`);
     const sid = season.id;
@@ -656,43 +636,28 @@ async function loadFromFirebase() {
       tags:    tags.docs.map(d=>({id:d.id,...d.data()})),
     };
   }
+  activeSeason = state.seasons[0] || null;
+  setFooterStatus("🔥 Firebase");
 }
 
-function loadFromLocal() {
-  const saved = localStorage.getItem('rm_roles_v2');
-  if (saved) { try { const p = JSON.parse(saved); state.seasons=p.seasons||[]; state.data=p.data||{}; } catch(e){} }
-}
-
-function seedDefault() {
-  const s1 = { id: uid(), name: "2024/2025", order: 0 };
-  const s2 = { id: uid(), name: "2025/2026", order: 1 };
-  state.seasons = [s1, s2];
-
-  [s1,s2].forEach(s => {
-    const sd = ensureSD(s.id);
-    sd.roles   = [{id:uid(),name:"Coordinador"},{id:uid(),name:"Técnico"},{id:uid(),name:"Ojeador"},{id:uid(),name:"Jefe de Área"}];
-    sd.persons = [{id:uid(),name:"Javier M.",role:"Coordinador"},{id:uid(),name:"Lucía P.",role:"Jefe de Área"},{id:uid(),name:"Carlos D.",role:"Ojeador"},{id:uid(),name:"Ana R.",role:"Técnico"}];
-    sd.tags    = [{id:uid(),name:"Cantera",color:"#2563eb"},{id:uid(),name:"Técnico",color:"#16a34a"},{id:uid(),name:"Captación",color:"#ea580c"},{id:uid(),name:"Evaluación",color:"#d97706"}];
-    const b1 = {id:uid(),name:"Fútbol Base",desc:"Gestión de roles y tareas del fútbol base",color:"#2563eb",order:0};
-    const b2 = {id:uid(),name:"Academia",desc:"Coordinación de la academia y cantera",color:"#7c3aed",order:1};
-    sd.boards = [b1, b2];
-    const col1={id:uid(),boardId:b1.id,name:"Planificación",color:"#2563eb",order:0};
-    const col2={id:uid(),boardId:b1.id,name:"Coordinación",color:"#7c3aed",order:1};
-    const col3={id:uid(),boardId:b1.id,name:"Desarrollo",color:"#16a34a",order:2};
-    const col4={id:uid(),boardId:b2.id,name:"Scouting",color:"#ea580c",order:0};
-    const col5={id:uid(),boardId:b2.id,name:"Competición",color:"#db2777",order:1};
-    sd.columns = [col1,col2,col3,col4,col5];
-    sd.cards = [
-      {id:uid(),title:"Diseño del calendario de entrenamientos",columnId:col1.id,role:"Coordinador",person:"Javier M.",desc:"Planificación anual y semanal de sesiones.",tags:["Cantera"],color:"#2563eb"},
-      {id:uid(),title:"Seguimiento de jugadores",columnId:col2.id,role:"Jefe de Área",person:"Lucía P.",desc:"Coordinación entre base y filial.",tags:["Técnico"],color:"#7c3aed"},
-      {id:uid(),title:"Evaluación mensual",columnId:col3.id,role:"Técnico",person:"Ana R.",desc:"Valoración del progreso individual.",tags:["Evaluación"],color:"#16a34a"},
-      {id:uid(),title:"Informes de captación",columnId:col4.id,role:"Ojeador",person:"Carlos D.",desc:"Análisis de informes de captación nacional.",tags:["Captación"],color:"#ea580c"},
-    ];
-  });
+function showFirebaseError(e) {
+  console.error("Firebase error:", e);
+  const splash = document.getElementById('splash');
+  if (splash) {
+    splash.innerHTML = \`
+      <div class="splash-logo"><img src="https://raw.githubusercontent.com/PabliVM/PLANNING/main/assets/rm.png" alt="RM" onerror="this.style.display='none'"></div>
+      <div class="splash-title">Error de conexión</div>
+      <div class="splash-sub" style="color:rgba(255,255,255,.8);max-width:320px;text-align:center">
+        No se ha podido conectar con Firebase Firestore.<br>Comprueba tu conexión e intenta recargar la página.
+      </div>
+      <div style="font-size:11px;color:rgba(255,255,255,.4);margin-top:8px;max-width:340px;text-align:center">\${esc(e?.message||'Error desconocido')}</div>
+      <button onclick="location.reload()" style="margin-top:16px;padding:10px 28px;border-radius:20px;border:2px solid rgba(255,255,255,.6);background:rgba(255,255,255,.15);color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">↺ Reintentar</button>
+    \`;
+  }
 }
 
 // =====================================================
-// PERSIST
+// PERSIST — Firebase only
 // =====================================================
 function scheduleSave() {
   setSaveDot('saving','Guardando…');
@@ -701,31 +666,29 @@ function scheduleSave() {
 }
 
 async function persistAll() {
-  if (useFirebase) {
-    try {
-      // Seasons
-      for (const s of state.seasons) {
-        const {id,...data} = s;
-        await setDoc(doc(db,"seasons",id), data);
-      }
-      // Per-season data
-      for (const [sid, sdata] of Object.entries(state.data)) {
-        const colls = ['boards','columns','cards','roles','persons','tags'];
-        for (const coll of colls) {
-          for (const item of sdata[coll]||[]) {
-            const {id,...data} = item;
-            await setDoc(doc(db,`seasons/${sid}/${coll}`,id), data);
-          }
+  try {
+    for (const s of state.seasons) {
+      const {id,...data} = s;
+      await setDoc(doc(db,"seasons",id), data);
+    }
+    for (const [sid, sdata] of Object.entries(state.data)) {
+      const colls = ['boards','columns','cards','roles','persons','tags'];
+      for (const coll of colls) {
+        for (const item of sdata[coll]||[]) {
+          const {id,...data} = item;
+          await setDoc(doc(db,`seasons/${sid}/${coll}`,id), data);
         }
       }
-      setSaveDot('ok','Guardado'); return;
-    } catch(e) { console.warn("Firebase save failed",e); }
+    }
+    setSaveDot('ok','Guardado');
+  } catch(e) {
+    console.error("Firebase save error:", e);
+    setSaveDot('error','Error al guardar');
+    toast("❌ Error al guardar en Firebase","err");
   }
-  localStorage.setItem('rm_roles_v2', JSON.stringify({seasons:state.seasons, data:state.data}));
-  setSaveDot('ok','Guardado');
 }
 
-window.manualSave = async () => { setSaveDot('saving','Guardando…'); await persistAll(); toast("✅ Guardado","ok"); };
+window.manualSave = async () => { setSaveDot('saving','Guardando…'); await persistAll(); };
 
 // =====================================================
 // ROUTING
@@ -791,7 +754,6 @@ function renderSeasonTabs() {
     nameEl.textContent = s.name;
     nameEl.onclick = () => {
       activeSeason = s;
-      localStorage.setItem('rm_active_season', s.id);
       activeBoard = null;
       showHome();
     };
@@ -1178,7 +1140,6 @@ window.saveSeason=function(){
   }
 
   activeSeason=state.seasons[state.seasons.length-1];
-  localStorage.setItem('rm_active_season',newId);
   closeNewSeason();
   scheduleSave();
   renderSeasonList();
@@ -1209,17 +1170,17 @@ window.confirmDelete=async function(){
   const{type,id}=deleteTarget;
   const d=sd();
   if(type==='card'){
-    if(useFirebase){try{await deleteDoc(doc(db,`seasons/${activeSeason.id}/cards`,id));}catch(e){}}
+    try{await deleteDoc(doc(db,`seasons/${activeSeason.id}/cards`,id));}catch(e){console.error(e);}
     d.cards=d.cards.filter(c=>c.id!==id);
   } else if(type==='col'){
     const childIds=d.cards.filter(c=>c.columnId===id).map(c=>c.id);
-    if(useFirebase){try{await deleteDoc(doc(db,`seasons/${activeSeason.id}/columns`,id));for(const cid of childIds)await deleteDoc(doc(db,`seasons/${activeSeason.id}/cards`,cid));}catch(e){}}
+    try{await deleteDoc(doc(db,`seasons/${activeSeason.id}/columns`,id));for(const cid of childIds)await deleteDoc(doc(db,`seasons/${activeSeason.id}/cards`,cid));}catch(e){console.error(e);}
     d.columns=d.columns.filter(c=>c.id!==id);
     d.cards=d.cards.filter(c=>c.columnId!==id);
   } else if(type==='board'){
     const colIds=d.columns.filter(c=>c.boardId===id).map(c=>c.id);
     const cardIds=d.cards.filter(c=>colIds.includes(c.columnId)).map(c=>c.id);
-    if(useFirebase){try{await deleteDoc(doc(db,`seasons/${activeSeason.id}/boards`,id));for(const cid of colIds)await deleteDoc(doc(db,`seasons/${activeSeason.id}/columns`,cid));for(const cid of cardIds)await deleteDoc(doc(db,`seasons/${activeSeason.id}/cards`,cid));}catch(e){}}
+    try{await deleteDoc(doc(db,`seasons/${activeSeason.id}/boards`,id));for(const cid of colIds)await deleteDoc(doc(db,`seasons/${activeSeason.id}/columns`,cid));for(const cid of cardIds)await deleteDoc(doc(db,`seasons/${activeSeason.id}/cards`,cid));}catch(e){console.error(e);}
     d.boards=d.boards.filter(b=>b.id!==id);
     d.columns=d.columns.filter(c=>c.boardId!==id);
     d.cards=d.cards.filter(c=>!cardIds.includes(c.id));
@@ -1302,7 +1263,6 @@ function renderSeasonList(){
 
 window.switchSeason=function(sid){
   activeSeason=state.seasons.find(s=>s.id===sid);
-  localStorage.setItem('rm_active_season',sid);
   activeBoard=null;
   document.getElementById('configSeasonLabel').textContent=activeSeason?.name||'';
   renderMaestroLists();
@@ -1322,7 +1282,7 @@ const _origConfirmDelete = window.confirmDelete;
 window.confirmDelete = async function(){
   if(deleteTarget?.type==='season'){
     const sid=deleteTarget.id;
-    if(useFirebase){/* full delete would require sub-collections, skip for now */}
+    // Season data already removed from state; sub-collections cleaned on next full delete
     state.seasons=state.seasons.filter(s=>s.id!==sid);
     delete state.data[sid];
     if(activeSeason?.id===sid) activeSeason=state.seasons[0]||null;
@@ -1368,7 +1328,7 @@ window.deleteMaestro=function(type,id){
   if(type==='persons') inUse=d.cards.filter(c=>c.person===item.name).length;
   if(type==='tags')    inUse=d.cards.filter(c=>(c.tags||[]).includes(item.name)).length;
   if(inUse>0){toast(`En uso en ${inUse} ficha${inUse!==1?'s':''}. Edítalas primero.`,"err");return;}
-  if(useFirebase) deleteDoc(doc(db,`seasons/${activeSeason.id}/${type}`,id)).catch(()=>{});
+  deleteDoc(doc(db,`seasons/${activeSeason.id}/${type}`,id)).catch(e=>console.error(e));
   d[type]=d[type].filter(x=>x.id!==id);
   scheduleSave(); renderMaestroLists();
   if(activeBoard) updateFilters();
@@ -1409,14 +1369,7 @@ window.toggleDark=function(){
   document.body.classList.toggle('dark');
   const dark=document.body.classList.contains('dark');
   document.getElementById('darkBtn').innerHTML=dark?'☀':'☾';
-  localStorage.setItem('rm_dark',dark?'1':'0');
 };
-function initDarkMode(){
-  if(localStorage.getItem('rm_dark')==='1'){
-    document.body.classList.add('dark');
-    document.getElementById('darkBtn').innerHTML='☀';
-  }
-}
 
 // =====================================================
 // SPLASH
