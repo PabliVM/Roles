@@ -1165,30 +1165,87 @@ window.askDelete=function(type,id){
   document.getElementById('delOverlay').classList.add('open');
 };
 window.closeDelModal=()=>{document.getElementById('delOverlay').classList.remove('open');deleteTarget=null;};
-window.confirmDelete=async function(){
-  if(!deleteTarget)return;
-  const{type,id}=deleteTarget;
-  const d=sd();
-  if(type==='card'){
-    try{await deleteDoc(doc(db,`seasons/${activeSeason.id}/cards`,id));}catch(e){console.error(e);}
-    d.cards=d.cards.filter(c=>c.id!==id);
-  } else if(type==='col'){
-    const childIds=d.cards.filter(c=>c.columnId===id).map(c=>c.id);
-    try{await deleteDoc(doc(db,`seasons/${activeSeason.id}/columns`,id));for(const cid of childIds)await deleteDoc(doc(db,`seasons/${activeSeason.id}/cards`,cid));}catch(e){console.error(e);}
-    d.columns=d.columns.filter(c=>c.id!==id);
-    d.cards=d.cards.filter(c=>c.columnId!==id);
-  } else if(type==='board'){
-    const colIds=d.columns.filter(c=>c.boardId===id).map(c=>c.id);
-    const cardIds=d.cards.filter(c=>colIds.includes(c.columnId)).map(c=>c.id);
-    try{await deleteDoc(doc(db,`seasons/${activeSeason.id}/boards`,id));for(const cid of colIds)await deleteDoc(doc(db,`seasons/${activeSeason.id}/columns`,cid));for(const cid of cardIds)await deleteDoc(doc(db,`seasons/${activeSeason.id}/cards`,cid));}catch(e){console.error(e);}
-    d.boards=d.boards.filter(b=>b.id!==id);
-    d.columns=d.columns.filter(c=>c.boardId!==id);
-    d.cards=d.cards.filter(c=>!cardIds.includes(c.id));
+// =====================================================
+// DELETE HELPERS — Firebase first, then memory
+// =====================================================
+
+// Deletes all docs in a Firestore subcollection path
+async function deleteCollectionDocs(path) {
+  const snap = await getDocs(collection(db, path));
+  await Promise.all(snap.docs.map(d => deleteDoc(doc(db, path, d.id))));
+}
+
+// Deletes a full season and ALL its subcollections from Firestore
+async function deleteSeasonCompletely(seasonId) {
+  const colls = ['boards','columns','cards','roles','persons','tags'];
+  for (const c of colls) await deleteCollectionDocs(`seasons/${seasonId}/${c}`);
+  await deleteDoc(doc(db, "seasons", seasonId));
+}
+
+window.confirmDelete = async function(){
+  if (!deleteTarget) return;
+  const { type, id } = deleteTarget;
+  const sid = activeSeason.id;
+  const d = sd();
+
+  closeDelModal();
+
+  try {
+    if (type === 'card') {
+      // 1. Delete from Firebase
+      await deleteDoc(doc(db, `seasons/${sid}/cards`, id));
+      // 2. Update memory
+      d.cards = d.cards.filter(c => c.id !== id);
+      // 3. Render
+      renderKanban();
+      toast("🗑 Ficha eliminada", "info");
+
+    } else if (type === 'col') {
+      // 1. Delete column + all child cards from Firebase
+      const childIds = d.cards.filter(c => c.columnId === id).map(c => c.id);
+      await deleteDoc(doc(db, `seasons/${sid}/columns`, id));
+      await Promise.all(childIds.map(cid => deleteDoc(doc(db, `seasons/${sid}/cards`, cid))));
+      // 2. Update memory
+      d.columns = d.columns.filter(c => c.id !== id);
+      d.cards   = d.cards.filter(c => c.columnId !== id);
+      // 3. Render
+      renderKanban();
+      toast("🗑 Área eliminada", "info");
+
+    } else if (type === 'board') {
+      // 1. Delete board + all columns + all their cards from Firebase
+      const colIds  = d.columns.filter(c => c.boardId === id).map(c => c.id);
+      const cardIds = d.cards.filter(c => colIds.includes(c.columnId)).map(c => c.id);
+      await deleteDoc(doc(db, `seasons/${sid}/boards`, id));
+      await Promise.all(colIds.map(cid  => deleteDoc(doc(db, `seasons/${sid}/columns`, cid))));
+      await Promise.all(cardIds.map(cid => deleteDoc(doc(db, `seasons/${sid}/cards`,   cid))));
+      // 2. Update memory
+      d.boards  = d.boards.filter(b  => b.id !== id);
+      d.columns = d.columns.filter(c => c.boardId !== id);
+      d.cards   = d.cards.filter(c  => !cardIds.includes(c.id));
+      // 3. Render
+      activeBoard = null;
+      showHome();
+      toast("🗑 Tablero eliminado", "info");
+
+    } else if (type === 'season') {
+      // 1. Delete entire season tree from Firebase
+      await deleteSeasonCompletely(id);
+      // 2. Update memory
+      state.seasons = state.seasons.filter(s => s.id !== id);
+      delete state.data[id];
+      if (activeSeason?.id === id) activeSeason = state.seasons[0] || null;
+      // 3. Render
+      renderSeasonList();
+      showHome();
+      toast("🗑 Temporada eliminada", "info");
+    }
+
+  } catch(e) {
+    console.error("Firebase delete error:", e);
+    toast("❌ Error al borrar en Firebase. Recarga la página.", "err");
+    // Do NOT update local state — Firebase is source of truth
   }
-  closeDelModal();scheduleSave();
-  if(type==='board'||activeBoard?.id===id){activeBoard=null;showHome();}
-  else{renderKanban();}
-  toast("🗑 Eliminado","info");
 };
 
 // =====================================================
@@ -1274,23 +1331,8 @@ window.switchSeason=function(sid){
 window.askDeleteSeason=function(sid){
   const s=state.seasons.find(x=>x.id===sid);
   deleteTarget={type:'season',id:sid};
-  document.getElementById('delMsg').textContent=`¿Eliminar la temporada "${s?.name}"? Se borrarán todos sus tableros, áreas, fichas y maestros.`;
+  document.getElementById('delMsg').textContent=`¿Eliminar la temporada "${s?.name}"? Se borrarán todos sus tableros, áreas, fichas y maestros. Esta acción no se puede deshacer.`;
   document.getElementById('delOverlay').classList.add('open');
-};
-// Override confirmDelete for season type
-const _origConfirmDelete = window.confirmDelete;
-window.confirmDelete = async function(){
-  if(deleteTarget?.type==='season'){
-    const sid=deleteTarget.id;
-    // Season data already removed from state; sub-collections cleaned on next full delete
-    state.seasons=state.seasons.filter(s=>s.id!==sid);
-    delete state.data[sid];
-    if(activeSeason?.id===sid) activeSeason=state.seasons[0]||null;
-    closeDelModal();scheduleSave();renderSeasonList();showHome();
-    toast("🗑 Temporada eliminada","info");
-    return;
-  }
-  await _origConfirmDelete();
 };
 
 window.addMaestro=function(type){
@@ -1321,18 +1363,25 @@ window.addMaestro=function(type){
   toast("✅ Añadido","ok");
 };
 
-window.deleteMaestro=function(type,id){
+window.deleteMaestro=async function(type,id){
   const d=sd(); const item=d[type].find(x=>x.id===id); if(!item)return;
   let inUse=0;
   if(type==='roles')   inUse=d.cards.filter(c=>c.role===item.name).length;
   if(type==='persons') inUse=d.cards.filter(c=>c.person===item.name).length;
   if(type==='tags')    inUse=d.cards.filter(c=>(c.tags||[]).includes(item.name)).length;
   if(inUse>0){toast(`En uso en ${inUse} ficha${inUse!==1?'s':''}. Edítalas primero.`,"err");return;}
-  deleteDoc(doc(db,`seasons/${activeSeason.id}/${type}`,id)).catch(e=>console.error(e));
-  d[type]=d[type].filter(x=>x.id!==id);
-  scheduleSave(); renderMaestroLists();
-  if(activeBoard) updateFilters();
-  toast("🗑 Eliminado","info");
+  try {
+    // 1. Delete from Firebase first
+    await deleteDoc(doc(db, `seasons/${activeSeason.id}/${type}`, id));
+    // 2. Update memory only after Firebase confirms
+    d[type]=d[type].filter(x=>x.id!==id);
+    renderMaestroLists();
+    if(activeBoard) updateFilters();
+    toast("🗑 Eliminado","info");
+  } catch(e) {
+    console.error("Firebase delete error:", e);
+    toast("❌ Error al borrar en Firebase","err");
+  }
 };
 
 // =====================================================
