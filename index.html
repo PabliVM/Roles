@@ -598,21 +598,26 @@ window.addEventListener('DOMContentLoaded', async () => {
 // =====================================================
 async function loadAll() {
   setSplashMsg("Conectando con Firebase…");
-  try {
+  // Race Firebase against a 6s timeout so splash never gets stuck
+  const firebaseLoad = (async () => {
     const app = initializeApp(firebaseConfig);
     db = getFirestore(app);
-    useFirebase = true;
-    setSplashMsg("Cargando temporadas…");
+    setSplashMsg("Cargando datos…");
     await loadFromFirebase();
+  })();
+  const timeout = new Promise((_,reject) => setTimeout(() => reject(new Error('timeout')), 6000));
+  try {
+    await Promise.race([firebaseLoad, timeout]);
+    useFirebase = true;
     setFooterStatus("🔥 Firebase");
   } catch(e) {
-    console.warn("Firebase failed:", e);
+    console.warn("Firebase failed or timed out:", e);
+    db = null; useFirebase = false;
     setSplashMsg("Cargando datos locales…");
     loadFromLocal();
     setFooterStatus("💾 Local");
   }
   if (!state.seasons.length) seedDefault();
-  // Set active season
   const savedSeason = localStorage.getItem('rm_active_season');
   activeSeason = state.seasons.find(s => s.id === savedSeason) || state.seasons[0];
 }
