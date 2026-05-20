@@ -558,12 +558,13 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyCkc2CT8lBWFqo94nlC4J3WIQb2Q3gVSfE",
-  authDomain: "roles-3f4a0.firebaseapp.com",
-  projectId: "roles-3f4a0",
-  storageBucket: "roles-3f4a0.firebasestorage.app",
-  messagingSenderId: "224811008593",
-  appId: "1:224811008593:web:3fbd10854547905013ae70"
+  apiKey: "AIzaSyARhqJphDvCvJkerJG6H0U2pbXSoRXDmfY",
+  authDomain: "wordflow-a908b.firebaseapp.com",
+  databaseURL: "https://wordflow-a908b-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "wordflow-a908b",
+  storageBucket: "wordflow-a908b.firebasestorage.app",
+  messagingSenderId: "61061103766",
+  appId: "1:61061103766:web:7bbfbed80dfffe221cc2b7"
 };
 
 let db = null;
@@ -597,12 +598,22 @@ function ensureSD(sid) { if (!state.data[sid]) state.data[sid] = emptySeasonData
 // =====================================================
 window.addEventListener('DOMContentLoaded', async () => {
   initTagColorMini();
+  // Timeout de 12s: si Firebase no responde, muestra error
+  let timedOut = false;
+  const timeoutId = setTimeout(() => {
+    timedOut = true;
+    showFirebaseError(new Error('Tiempo de espera agotado (12s). Comprueba las reglas de Firestore y tu conexión.'));
+  }, 12000);
   try {
     await loadAll();
-    hideSplash();
-    renderApp();
+    if (!timedOut) {
+      clearTimeout(timeoutId);
+      hideSplash();
+      renderApp();
+    }
   } catch(e) {
-    showFirebaseError(e);
+    clearTimeout(timeoutId);
+    if (!timedOut) showFirebaseError(e);
   }
 });
 
@@ -611,7 +622,9 @@ window.addEventListener('DOMContentLoaded', async () => {
 // =====================================================
 async function loadAll() {
   setSplashMsg("Conectando con Firebase…");
-  const app = initializeApp(firebaseConfig);
+  let app;
+  try { app = initializeApp(firebaseConfig); }
+  catch(e) { throw new Error("Error al inicializar Firebase: " + e.message); }
   db = getFirestore(app);
   setSplashMsg("Cargando temporadas…");
   const seasonSnap = await getDocs(collection(db, "seasons"));
@@ -643,17 +656,22 @@ async function loadAll() {
 function showFirebaseError(e) {
   console.error("Firebase error:", e);
   const splash = document.getElementById('splash');
-  if (splash) {
-    splash.innerHTML = \`
-      <div class="splash-logo"><img src="https://raw.githubusercontent.com/PabliVM/PLANNING/main/assets/rm.png" alt="RM" onerror="this.style.display='none'"></div>
-      <div class="splash-title">Error de conexión</div>
-      <div class="splash-sub" style="color:rgba(255,255,255,.8);max-width:320px;text-align:center">
-        No se ha podido conectar con Firebase Firestore.<br>Comprueba tu conexión e intenta recargar la página.
-      </div>
-      <div style="font-size:11px;color:rgba(255,255,255,.4);margin-top:8px;max-width:340px;text-align:center">\${esc(e?.message||'Error desconocido')}</div>
-      <button onclick="location.reload()" style="margin-top:16px;padding:10px 28px;border-radius:20px;border:2px solid rgba(255,255,255,.6);background:rgba(255,255,255,.15);color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">↺ Reintentar</button>
-    \`;
-  }
+  if (!splash) return;
+  const msg = e?.message || 'Error desconocido';
+  const isTimeout = msg.includes('agotado');
+  const isPermission = msg.toLowerCase().includes('permission') || msg.toLowerCase().includes('missing');
+  let hint = '';
+  if (isPermission) hint = 'Las reglas de Firestore pueden estar bloqueando el acceso. Revisa Firebase Console → Firestore → Reglas.';
+  else if (isTimeout) hint = 'Firebase no respondió en 12 segundos. Comprueba tu conexión a internet y las reglas de Firestore.';
+  else hint = 'Comprueba tu conexión e intenta recargar.';
+  splash.innerHTML = `
+    <div class="splash-logo"><img src="https://raw.githubusercontent.com/PabliVM/PLANNING/main/assets/rm.png" alt="RM" onerror="this.style.display='none'"></div>
+    <div class="splash-title" style="color:#fff">Error de conexión</div>
+    <div class="splash-sub" style="color:rgba(255,255,255,.85);max-width:340px;text-align:center;line-height:1.5">${hint}</div>
+    <div style="font-size:11px;color:rgba(255,255,255,.35);margin-top:6px;max-width:340px;text-align:center;word-break:break-all">${msg}</div>
+    <button onclick="location.reload()" style="margin-top:20px;padding:10px 28px;border-radius:20px;border:2px solid rgba(255,255,255,.5);background:rgba(255,255,255,.15);color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:background .2s" onmouseover="this.style.background='rgba(255,255,255,.28)'" onmouseout="this.style.background='rgba(255,255,255,.15)'">↺ Reintentar</button>
+    <div style="font-size:10px;color:rgba(255,255,255,.25);margin-top:12px">Proyecto: wordflow-a908b</div>
+  `;
 }
 
 // =====================================================
