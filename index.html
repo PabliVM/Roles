@@ -214,7 +214,7 @@ body.dark .color-swatch.selected{ border-color:#fff; }
   </div>
   <div class="header-title-wrap">
     <h1 class="doc-title">Departamento de Formación — Roles y Tareas</h1>
-    <span class="doc-season">Formación · 2025/2026</span>
+    <span class="doc-season" id="seasonDisplay" onclick="openSeasonPicker()" title="Cambiar temporada" style="cursor:pointer;border-bottom:1px dashed rgba(255,255,255,.4);padding-bottom:1px">Formación · 2025/2026</span>
   </div>
   <div class="header-actions">
     <button class="btn-save" id="saveBtn" onclick="manualSave()">
@@ -468,10 +468,17 @@ let dragCardId = null, saveTimeout = null;
 // INIT
 // =====================================================
 window.addEventListener('DOMContentLoaded', async () => {
+  initDarkMode();
+  initSeason();
   renderMiniTagColors();
   await loadData();
   render();
 });
+
+function initSeason() {
+  const s = getActiveSeason();
+  document.getElementById('seasonDisplay').textContent = 'Formación · ' + s;
+}
 
 // =====================================================
 // PERSISTENCE
@@ -1058,8 +1065,86 @@ function renderColorGrid(gridId, type) {
 // =====================================================
 window.toggleDark = function() {
   document.body.classList.toggle('dark');
-  document.getElementById('darkBtn').innerHTML = document.body.classList.contains('dark')?'☀':'☾';
+  const isDark = document.body.classList.contains('dark');
+  document.getElementById('darkBtn').innerHTML = isDark?'☀':'☾';
+  localStorage.setItem('rm_roles_dark', isDark?'1':'0');
 };
+
+function initDarkMode() {
+  const saved = localStorage.getItem('rm_roles_dark');
+  if (saved === '1') {
+    document.body.classList.add('dark');
+    document.getElementById('darkBtn').innerHTML = '☀';
+  }
+}
+
+// =====================================================
+// SEASON PICKER
+// =====================================================
+const DEFAULT_SEASONS = ['2023/2024','2024/2025','2025/2026','2026/2027','2027/2028'];
+
+function getSeasons() {
+  const saved = localStorage.getItem('rm_roles_seasons');
+  return saved ? JSON.parse(saved) : [...DEFAULT_SEASONS];
+}
+function getActiveSeason() {
+  return localStorage.getItem('rm_roles_active_season') || '2025/2026';
+}
+function saveSeasons(seasons) {
+  localStorage.setItem('rm_roles_seasons', JSON.stringify(seasons));
+}
+
+window.openSeasonPicker = function() {
+  renderSeasonList();
+  document.getElementById('seasonOverlay').classList.add('open');
+  setTimeout(()=>document.getElementById('newSeasonInput').focus(), 100);
+};
+window.closeSeasonPicker = function() {
+  document.getElementById('seasonOverlay').classList.remove('open');
+};
+window.addSeason = function() {
+  const val = document.getElementById('newSeasonInput').value.trim();
+  if (!val) { toast('Escribe una temporada','err'); return; }
+  const seasons = getSeasons();
+  if (seasons.includes(val)) { toast('Ya existe','err'); return; }
+  seasons.push(val);
+  saveSeasons(seasons);
+  setActiveSeason(val);
+  document.getElementById('newSeasonInput').value = '';
+  renderSeasonList();
+  toast('✅ Temporada añadida y activada','ok');
+};
+function setActiveSeason(season) {
+  localStorage.setItem('rm_roles_active_season', season);
+  document.getElementById('seasonDisplay').textContent = 'Formación · ' + season;
+}
+window.deleteSeason = function(season) {
+  const seasons = getSeasons().filter(s=>s!==season);
+  saveSeasons(seasons);
+  if (getActiveSeason()===season) setActiveSeason(seasons[seasons.length-1]||'2025/2026');
+  renderSeasonList();
+  toast('🗑 Temporada eliminada','info');
+};
+function renderSeasonList() {
+  const list = document.getElementById('seasonList');
+  const seasons = getSeasons();
+  const active = getActiveSeason();
+  list.innerHTML = '';
+  seasons.forEach(s => {
+    const isActive = s === active;
+    const div = document.createElement('div');
+    div.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface-alt);cursor:pointer;transition:all .15s;';
+    if (isActive) div.style.cssText += 'border-color:var(--rm-blue);background:var(--rm-blue-bg);';
+    div.innerHTML = `
+      <span style="font-size:15px">${isActive?'✅':'⚽'}</span>
+      <span style="flex:1;font-size:13px;font-weight:${isActive?'700':'500'};color:${isActive?'var(--rm-blue)':'var(--text)'}">${esc(s)}</span>
+      ${isActive?'<span style="font-size:10px;font-weight:700;color:var(--rm-blue);background:var(--rm-blue-bg);padding:2px 8px;border-radius:20px;border:1px solid var(--rm-blue)">ACTIVA</span>':''}
+      ${!isActive?`<button onclick="event.stopPropagation();deleteSeason('${s}')" style="width:20px;height:20px;border:none;background:transparent;cursor:pointer;color:var(--text-mut);font-size:14px;display:flex;align-items:center;justify-content:center;border-radius:4px;" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--text-mut)'">×</button>`:''}
+    `;
+    if (!isActive) div.onclick = () => { setActiveSeason(s); renderSeasonList(); closeSeasonPicker(); toast('📅 Temporada '+s+' activada','ok'); };
+    list.appendChild(div);
+  });
+}
 
 // =====================================================
 // HELPERS
@@ -1080,5 +1165,31 @@ function setFooterStatus(msg) { const el=document.getElementById('footerStatus')
 
 window.onDragOver=onDragOver; window.onDragLeave=onDragLeave; window.onDrop=onDrop;
 </script>
+
+<!-- ====== SEASON PICKER ====== -->
+<div class="overlay" id="seasonOverlay" onclick="if(event.target===this)closeSeasonPicker()" style="z-index:700">
+  <div class="modal col-modal">
+    <div class="modal-header">
+      <span class="modal-title">⚽ Temporada activa</span>
+      <button class="modal-close" onclick="closeSeasonPicker()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Selecciona la temporada</label>
+        <div id="seasonList" style="display:flex;flex-direction:column;gap:6px;"></div>
+      </div>
+      <div class="form-group" style="border-top:1px solid var(--border);padding-top:14px;">
+        <label class="form-label">Añadir temporada</label>
+        <div style="display:flex;gap:8px;">
+          <input class="form-input" id="newSeasonInput" placeholder="Ej. 2026/2027" onkeydown="if(event.key==='Enter')addSeason()">
+          <button class="btn btn-primary" onclick="addSeason()">＋</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeSeasonPicker()">Cerrar</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
