@@ -93,13 +93,23 @@ body.dark .btn-ghost:hover{ background:#2a1f10; }
 }
 .season-tabs{ display:flex; gap:6px; flex-wrap:wrap; }
 .season-tab{
-  padding:6px 18px; border-radius:20px;
+  padding:5px 10px 5px 16px; border-radius:20px;
   border:1px solid var(--border); background:var(--surface);
   font-size:12px; font-weight:600; cursor:pointer;
   color:var(--text-sec); transition:all var(--tr);
+  display:flex; align-items:center; gap:6px;
 }
 .season-tab:hover{ border-color:var(--rm-blue); color:var(--rm-blue); }
 .season-tab.active{ background:var(--rm-blue); color:#fff; border-color:var(--rm-blue); }
+.season-tab-del{
+  width:16px; height:16px; border-radius:50%;
+  border:none; background:rgba(0,0,0,.12); color:inherit;
+  cursor:pointer; display:flex; align-items:center; justify-content:center;
+  font-size:12px; line-height:1; padding:0; flex-shrink:0;
+  transition:all var(--tr);
+}
+.season-tab.active .season-tab-del{ background:rgba(255,255,255,.25); color:#fff; }
+.season-tab-del:hover{ background:var(--red) !important; color:#fff !important; }
 .home-boards-grid{
   display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr));
   gap:16px;
@@ -776,13 +786,23 @@ function renderSeasonTabs() {
   [...state.seasons].sort((a,b)=>(a.order||0)-(b.order||0)).forEach(s => {
     const tab = document.createElement('div');
     tab.className = 'season-tab' + (s.id===activeSeason?.id?' active':'');
-    tab.textContent = s.name;
-    tab.onclick = () => {
+    // Name span (clickable to switch)
+    const nameEl = document.createElement('span');
+    nameEl.textContent = s.name;
+    nameEl.onclick = () => {
       activeSeason = s;
       localStorage.setItem('rm_active_season', s.id);
       activeBoard = null;
       showHome();
     };
+    tab.appendChild(nameEl);
+    // Delete button
+    const del = document.createElement('button');
+    del.className = 'season-tab-del';
+    del.innerHTML = '×';
+    del.title = 'Eliminar temporada';
+    del.onclick = (e) => { e.stopPropagation(); askDeleteSeason(s.id); };
+    tab.appendChild(del);
     tabs.appendChild(tab);
   });
 }
