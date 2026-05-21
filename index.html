@@ -261,6 +261,22 @@ body.dark .color-swatch.selected{ border-color:#fff; }
 /* === MISC === */
 .empty-state{ text-align:center; padding:40px 20px; color:var(--text-mut); }
 body.dark .inline-confirm-banner{ background:#2a1010 !important; }
+/* === DRAG & DROP ENHANCED === */
+.card.drag-over-top::before,.card.drag-over-bottom::after{
+  content:''; display:block; height:3px; border-radius:3px;
+  background:var(--rm-blue); margin:2px 0;
+}
+.card.drag-over-top{ border-top:3px solid var(--rm-blue); }
+.card.drag-over-bottom{ border-bottom:3px solid var(--rm-blue); }
+.column.col-dragging{ opacity:.4; }
+.column.col-drag-over{ outline:2px dashed var(--rm-blue); border-radius:var(--rl); background:var(--rm-blue-bg); }
+.board-card.board-dragging{ opacity:.4; transform:rotate(1deg); }
+.board-card.board-drag-over{ outline:2px dashed var(--rm-blue); transform:translateY(-4px); }
+.col-header{ cursor:grab; }
+.col-header:active{ cursor:grabbing; }
+.col-drag-handle{ font-size:14px; color:var(--text-faint); cursor:grab; padding:0 4px; }
+.col-drag-handle:hover{ color:var(--text-sec); }
+
 .empty-state-icon{ font-size:36px; margin-bottom:10px; }
 .empty-state-text{ font-size:13px; }
 .tag-pill{ display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border-radius:20px; font-size:11px; font-weight:600; border:1px solid var(--border); background:var(--surface-alt); color:var(--text-sec); cursor:pointer; transition:all var(--tr); }
@@ -578,7 +594,7 @@ let selectedCardTags = [];
 let deleteTarget = null;
 let currentView = 'board';
 let searchQuery = '', filterArea = '', filterRole = '', filterPerson = '', filterTag = '';
-let dragCardId = null, saveTimeout = null;
+let dragCardId = null, dragColId = null, dragBoardId = null, saveTimeout = null;
 
 // Helpers to get season data
 function sd() { return activeSeason ? (state.data[activeSeason.id] || emptySeasonData()) : emptySeasonData(); }
@@ -786,6 +802,13 @@ function renderBoardsGrid() {
         <span class="board-card-stat">📋 ${cols} área${cols!==1?'s':''}</span>
         <span class="board-card-stat">🗂 ${cards} ficha${cards!==1?'s':''}</span>
       </div>`;
+    div.draggable = true;
+    div.dataset.boardId = b.id;
+    div.ondragstart = e => onBoardDragStart(e, b.id);
+    div.ondragend = onBoardDragEnd;
+    div.ondragover = e => onBoardDragOver(e, b.id);
+    div.ondragleave = e => onBoardDragLeave(e);
+    div.ondrop = e => onBoardDrop(e, b.id);
     div.onclick = () => enterBoard(b.id);
     grid.appendChild(div);
   });
@@ -833,23 +856,32 @@ function renderBoard() {
   board.innerHTML = '';
 
   cols.forEach(col => {
-    const colCards = filtered.filter(c=>c.columnId===col.id);
+    const colCards = filtered.filter(c=>c.columnId===col.id).sort((a,b)=>(a.order||0)-(b.order||0));
     const colEl = document.createElement('div');
     colEl.className = 'column';
+    colEl.draggable = true;
+    colEl.dataset.colId = col.id;
+    colEl.ondragstart = e => onColDragStart(e, col.id);
+    colEl.ondragend = onColDragEnd;
     colEl.innerHTML = `
-      <div class="col-header">
-        <div class="col-title"><span class="col-dot" style="background:${col.color}"></span>${esc(col.name)}</div>
+      <div class="col-header"
+           ondragover="onColDragOver(event,'${col.id}')"
+           ondragleave="onColDragLeave(event)"
+           ondrop="onColDrop(event,'${col.id}')">
+        <div class="col-title">
+          <span class="col-drag-handle" title="Arrastrar para mover">⠿</span>
+          <span class="col-dot" style="background:${col.color}"></span>${esc(col.name)}
+        </div>
         <div style="display:flex;gap:5px;align-items:center">
           <span class="col-count">${colCards.length}</span>
           <button class="col-add" onclick="openCardModal('${col.id}')">＋</button>
           <button class="card-btn" onclick="openColModal('${col.id}')">✏️</button>
-
         </div>
       </div>
       <div class="drop-zone" id="zone-${col.id}"
-        ondragover="onDragOver(event,'${col.id}')"
+        ondragover="onCardDragOver(event,'${col.id}')"
         ondragleave="onDragLeave(event)"
-        ondrop="onDrop(event,'${col.id}')">
+        ondrop="onCardDrop(event,'${col.id}')">
         ${colCards.length?'':'<div class="empty-state"><div class="empty-state-icon">📋</div><div class="empty-state-text">Sin fichas</div></div>'}
       </div>`;
     const zone = colEl.querySelector('.drop-zone');
@@ -867,8 +899,10 @@ function renderBoard() {
 function buildCard(card, colColor) {
   const el = document.createElement('div');
   el.className = 'card'; el.draggable = true; el.dataset.id = card.id;
-  el.ondragstart = e => onDragStart(e, card.id);
-  el.ondragend = onDragEnd;
+  el.ondragstart = e => onCardDragStart(e, card.id);
+  el.ondragend = onCardDragEnd;
+  el.ondragover = e => onCardDragOverCard(e, card.id);
+  el.ondragleave = e => onCardDragLeaveCard(e);
   const color = card.color||colColor||COLORS[0];
   const initials = (card.person||'?').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
   const data = sd();
@@ -947,18 +981,153 @@ function updateFilters() {
 }
 
 // =====================================================
-// DRAG & DROP
+// DRAG & DROP — Cards, Columns, Boards
 // =====================================================
-function onDragStart(e,id){dragCardId=id;e.currentTarget.classList.add('dragging');e.dataTransfer.effectAllowed='move';}
-function onDragEnd(e){e.currentTarget.classList.remove('dragging');document.querySelectorAll('.drop-zone').forEach(z=>z.classList.remove('drag-over'));}
-function onDragOver(e,colId){e.preventDefault();document.querySelectorAll('.drop-zone').forEach(z=>z.classList.remove('drag-over'));document.getElementById('zone-'+colId)?.classList.add('drag-over');}
-function onDragLeave(e){e.currentTarget.classList.remove('drag-over');}
-function onDrop(e,colId){
-  e.preventDefault();document.querySelectorAll('.drop-zone').forEach(z=>z.classList.remove('drag-over'));
-  if(!dragCardId)return;
-  const card=sd().cards.find(c=>c.id===dragCardId);
-  if(card&&card.columnId!==colId){card.columnId=colId;scheduleSave();renderBoard();toast("📌 Ficha movida","info");}
-  dragCardId=null;
+
+// ── CARDS ──────────────────────────────────────────
+function onCardDragStart(e, id) {
+  dragCardId = id;
+  e.currentTarget.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+  e.stopPropagation(); // don't trigger column drag
+}
+function onCardDragEnd(e) {
+  dragCardId = null;
+  document.querySelectorAll('.card').forEach(c => {
+    c.classList.remove('dragging','drag-over-top','drag-over-bottom');
+  });
+  document.querySelectorAll('.drop-zone').forEach(z => z.classList.remove('drag-over'));
+}
+function onCardDragOverCard(e, targetCardId) {
+  if (!dragCardId || dragCardId === targetCardId) return;
+  e.preventDefault(); e.stopPropagation();
+  const el = e.currentTarget;
+  const rect = el.getBoundingClientRect();
+  const mid = rect.top + rect.height / 2;
+  document.querySelectorAll('.card').forEach(c => c.classList.remove('drag-over-top','drag-over-bottom'));
+  el.classList.add(e.clientY < mid ? 'drag-over-top' : 'drag-over-bottom');
+}
+function onCardDragLeaveCard(e) {
+  e.currentTarget.classList.remove('drag-over-top','drag-over-bottom');
+}
+function onCardDragOver(e, colId) {
+  if (!dragCardId) return;
+  e.preventDefault();
+  document.querySelectorAll('.drop-zone').forEach(z => z.classList.remove('drag-over'));
+  document.getElementById('zone-'+colId)?.classList.add('drag-over');
+}
+function onDragLeave(e) { e.currentTarget.classList.remove('drag-over'); }
+function onCardDrop(e, colId) {
+  e.preventDefault();
+  document.querySelectorAll('.drop-zone').forEach(z => z.classList.remove('drag-over'));
+  document.querySelectorAll('.card').forEach(c => c.classList.remove('drag-over-top','drag-over-bottom'));
+  if (!dragCardId) return;
+  const d = sd();
+  const card = d.cards.find(c => c.id === dragCardId);
+  if (!card) { dragCardId = null; return; }
+  // Dropped on zone empty space → move to end of column
+  card.columnId = colId;
+  // Re-order: put at end
+  const colCards = d.cards.filter(c => c.columnId === colId && c.id !== dragCardId);
+  colCards.push(card);
+  colCards.forEach((c,i) => c.order = i);
+  dragCardId = null;
+  scheduleSave(); renderBoard();
+}
+
+// Drop ON another card (insert before/after)
+document.addEventListener('drop', e => {
+  if (!dragCardId) return;
+  const targetCard = e.target.closest('.card');
+  if (!targetCard || targetCard.dataset.id === dragCardId) return;
+  e.preventDefault();
+  const d = sd();
+  const card = d.cards.find(c => c.id === dragCardId);
+  const target = d.cards.find(c => c.id === targetCard.dataset.id);
+  if (!card || !target) return;
+  const rect = targetCard.getBoundingClientRect();
+  const insertBefore = e.clientY < rect.top + rect.height / 2;
+  card.columnId = target.columnId;
+  // Reorder
+  const colCards = d.cards.filter(c => c.columnId === target.columnId && c.id !== dragCardId);
+  const targetIdx = colCards.findIndex(c => c.id === target.id);
+  colCards.splice(insertBefore ? targetIdx : targetIdx + 1, 0, card);
+  colCards.forEach((c,i) => c.order = i);
+  dragCardId = null;
+  scheduleSave(); renderBoard();
+}, true);
+
+// ── COLUMNS ────────────────────────────────────────
+function onColDragStart(e, colId) {
+  if (dragCardId) { e.preventDefault(); return; } // card takes priority
+  dragColId = colId;
+  setTimeout(() => e.currentTarget.classList.add('col-dragging'), 0);
+  e.dataTransfer.effectAllowed = 'move';
+}
+function onColDragEnd(e) {
+  dragColId = null;
+  document.querySelectorAll('.column').forEach(c => c.classList.remove('col-dragging','col-drag-over'));
+}
+function onColDragOver(e, targetColId) {
+  if (!dragColId || dragColId === targetColId) return;
+  e.preventDefault(); e.stopPropagation();
+  document.querySelectorAll('.column').forEach(c => c.classList.remove('col-drag-over'));
+  // Find the column element for targetColId
+  const targetEl = document.querySelector(`.column[data-col-id="${targetColId}"]`);
+  targetEl?.classList.add('col-drag-over');
+}
+function onColDragLeave(e) {
+  e.currentTarget.closest('.column')?.classList.remove('col-drag-over');
+}
+function onColDrop(e, targetColId) {
+  e.preventDefault(); e.stopPropagation();
+  document.querySelectorAll('.column').forEach(c => c.classList.remove('col-dragging','col-drag-over'));
+  if (!dragColId || dragColId === targetColId) { dragColId = null; return; }
+  const d = sd();
+  const cols = d.columns.filter(c => c.boardId === activeBoard.id).sort((a,b)=>(a.order||0)-(b.order||0));
+  const fromIdx = cols.findIndex(c => c.id === dragColId);
+  const toIdx   = cols.findIndex(c => c.id === targetColId);
+  if (fromIdx < 0 || toIdx < 0) { dragColId = null; return; }
+  const [moved] = cols.splice(fromIdx, 1);
+  cols.splice(toIdx, 0, moved);
+  cols.forEach((c,i) => c.order = i);
+  dragColId = null;
+  scheduleSave(); renderBoard();
+}
+
+// ── BOARDS (home screen) ────────────────────────────
+function onBoardDragStart(e, boardId) {
+  dragBoardId = boardId;
+  setTimeout(() => e.currentTarget.classList.add('board-dragging'), 0);
+  e.dataTransfer.effectAllowed = 'move';
+}
+function onBoardDragEnd(e) {
+  dragBoardId = null;
+  document.querySelectorAll('.board-card').forEach(c => c.classList.remove('board-dragging','board-drag-over'));
+}
+function onBoardDragOver(e, targetBoardId) {
+  if (!dragBoardId || dragBoardId === targetBoardId) return;
+  e.preventDefault(); e.stopPropagation();
+  document.querySelectorAll('.board-card').forEach(c => c.classList.remove('board-drag-over'));
+  e.currentTarget.classList.add('board-drag-over');
+}
+function onBoardDragLeave(e) {
+  e.currentTarget.classList.remove('board-drag-over');
+}
+function onBoardDrop(e, targetBoardId) {
+  e.preventDefault();
+  document.querySelectorAll('.board-card').forEach(c => c.classList.remove('board-dragging','board-drag-over'));
+  if (!dragBoardId || dragBoardId === targetBoardId) { dragBoardId = null; return; }
+  const d = sd();
+  const boards = [...d.boards].sort((a,b)=>(a.order||0)-(b.order||0));
+  const fromIdx = boards.findIndex(b => b.id === dragBoardId);
+  const toIdx   = boards.findIndex(b => b.id === targetBoardId);
+  if (fromIdx < 0 || toIdx < 0) { dragBoardId = null; return; }
+  const [moved] = boards.splice(fromIdx, 1);
+  boards.splice(toIdx, 0, moved);
+  boards.forEach((b,i) => b.order = i);
+  dragBoardId = null;
+  scheduleSave(); renderBoardsGrid();
 }
 
 // =====================================================
@@ -1474,7 +1643,7 @@ function setSaveDot(st,label){
 }
 function setFooterStatus(msg){const el=document.getElementById('footerStatus');if(el)el.textContent='· '+msg;}
 
-window.onDragOver=onDragOver;window.onDragLeave=onDragLeave;window.onDrop=onDrop;
+window.onColDragOver=onColDragOver;window.onColDragLeave=onColDragLeave;window.onColDrop=onColDrop;window.onCardDragOver=onCardDragOver;window.onDragLeave=onDragLeave;window.onCardDrop=onCardDrop;
 </script>
 </body>
 </html>
