@@ -389,7 +389,7 @@ body.dark .inline-confirm-banner{ background:#2a1010 !important; }
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Área</label>
-          <select class="form-select" id="fArea"></select>
+          <select class="form-select" id="fArea" onchange="onCardAreaChange(this.value)"></select>
         </div>
         <div class="form-group">
           <label class="form-label">Rol</label>
@@ -1152,7 +1152,7 @@ function onBoardDrop(e, targetBoardId) {
 // CARD MODAL
 // =====================================================
 window.openCardModal = function(colId=null, cardId=null) {
-  editingCardId=cardId; selectedColor=COLORS[0]; selectedCardTags=[];
+  editingCardId=cardId; selectedCardTags=[];
   document.getElementById('cardModalTitle').textContent=cardId?'Editar ficha':'Nueva ficha';
   document.getElementById('cardDelBtn').style.display=cardId?'flex':'none';
   updateFilters();
@@ -1163,17 +1163,33 @@ window.openCardModal = function(colId=null, cardId=null) {
     document.getElementById('fArea').value=card.columnId||'';
     document.getElementById('fRole').value=card.role||'';
     document.getElementById('fPerson').value=card.person||'';
-    selectedCardTags=[...(card.tags||[])]; selectedColor=card.color||COLORS[0];
+    selectedCardTags=[...(card.tags||[])];
+    // Color: saved card color, fallback to its column color
+    const col=sd().columns.find(c=>c.id===card.columnId);
+    selectedColor=card.color||(col?.color||COLORS[0]);
   } else {
     ['fTitle','fDesc'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('fRole').value=''; document.getElementById('fPerson').value='';
-    if(colId)document.getElementById('fArea').value=colId;
+    if(colId){
+      document.getElementById('fArea').value=colId;
+      // Default color = column color
+      const col=sd().columns.find(c=>c.id===colId);
+      selectedColor=col?.color||COLORS[0];
+    } else {
+      selectedColor=COLORS[0];
+    }
   }
   renderTagCheckboxes(); renderColorGrid('colorGrid','card');
   document.getElementById('cardOverlay').classList.add('open');
   setTimeout(()=>document.getElementById('fTitle').focus(),100);
 };
 window.closeCardModal=()=>document.getElementById('cardOverlay').classList.remove('open');
+
+// When area changes in card modal, update color to match column (only if no custom color set)
+window.onCardAreaChange=function(colId){
+  const col=sd().columns.find(c=>c.id===colId);
+  if(col?.color){ selectedColor=col.color; renderColorGrid('colorGrid','card'); }
+};
 window.saveCard=function(){
   const title=document.getElementById('fTitle').value.trim();
   if(!title){toast("El título es obligatorio","err");return;}
@@ -1228,8 +1244,18 @@ window.saveColumn=function(){
   const name=document.getElementById('colName').value.trim();
   if(!name){toast("Nombre obligatorio","err");return;}
   const d=sd();
-  if(editingColId){const c=d.columns.find(c=>c.id===editingColId);c.name=name;c.color=selectedColColor;}
-  else{d.columns.push({id:uid(),boardId:activeBoard.id,name,color:selectedColColor,order:d.columns.filter(c=>c.boardId===activeBoard.id).length});}
+  if(editingColId){
+    const c=d.columns.find(c=>c.id===editingColId);
+    const oldColor=c.color;
+    c.name=name; c.color=selectedColColor;
+    // If color changed, update all cards in this column that had the old column color
+    if(oldColor!==selectedColColor){
+      d.cards.filter(card=>card.columnId===editingColId && card.color===oldColor)
+             .forEach(card=>card.color=selectedColColor);
+    }
+  } else {
+    d.columns.push({id:uid(),boardId:activeBoard.id,name,color:selectedColColor,order:d.columns.filter(c=>c.boardId===activeBoard.id).length});
+  }
   closeColModal();scheduleSave();renderKanban();
   toast(editingColId?"✅ Área actualizada":"✅ Área creada","ok");
 };
