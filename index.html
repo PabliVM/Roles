@@ -921,7 +921,7 @@ function buildCard(card, colColor) {
   el.ondragend = onCardDragEnd;
   el.ondragover = e => onCardDragOverCard(e, card.id);
   el.ondragleave = e => onCardDragLeaveCard(e);
-  const color = card.color||colColor||COLORS[0];
+  const color = colColor||card.color||COLORS[0]; // column color takes priority for visual
   const initials = (card.person||'?').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
   const data = sd();
   const tags = (card.tags||[]).map(t => {
@@ -933,17 +933,12 @@ function buildCard(card, colColor) {
     <div class="card-stripe" style="background:${color}"></div>
     <div class="card-top">
       <div class="card-title">${esc(card.title)}</div>
-      ${card.role?`<span class="card-role-badge">${esc(card.role)}</span>`:''}
+      <button class="card-btn" onclick="openCardModal(null,'${card.id}')" style="flex-shrink:0">✏️</button>
     </div>
+    ${card.role?`<div style="margin-top:3px"><span class="card-role-badge">${esc(card.role)}</span></div>`:''}
     ${card.desc?`<div class="card-desc">${esc(card.desc)}</div>`:''}
     ${tags?`<div class="card-tags">${tags}</div>`:''}
-    <div class="card-footer">
-      <div class="card-person">${card.person?`<div class="avatar" style="background:${color}">${initials}</div>${esc(card.person)}`:''}</div>
-      <div class="card-actions">
-        <button class="card-btn" onclick="openCardModal(null,'${card.id}')">✏️</button>
-
-      </div>
-    </div>`;
+    ${card.person?`<div class="card-person" style="margin-top:4px"><div class="avatar" style="background:${color}">${initials}</div>${esc(card.person)}</div>`:''}`;
   return el;
 }
 
