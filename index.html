@@ -920,7 +920,7 @@ function buildCard(card, colColor) {
     ${card.desc?`<div class="card-desc">${esc(card.desc)}</div>`:''}
     ${tags?`<div class="card-tags">${tags}</div>`:''}
     <div class="card-footer">
-      <div class="card-person"><div class="avatar" style="background:${color}">${initials}</div>${esc(card.person||'Sin asignar')}</div>
+      <div class="card-person">${card.person?`<div class="avatar" style="background:${color}">${initials}</div>${esc(card.person)}`:''}</div>
       <div class="card-actions">
         <button class="card-btn" onclick="openCardModal(null,'${card.id}')">✏️</button>
 
