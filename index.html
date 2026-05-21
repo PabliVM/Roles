@@ -158,12 +158,12 @@ body.dark .btn-ghost:hover{ background:#2a1f10; }
 .col-add:hover{ background:var(--rm-blue); color:#fff; border-color:var(--rm-blue); }
 .drop-zone{ min-height:80px; display:flex; flex-direction:column; gap:8px; border-radius:var(--rl); padding:4px; transition:background .15s; }
 .drop-zone.drag-over{ background:var(--rm-blue-bg); outline:2px dashed var(--rm-blue); }
-.card{ background:var(--surface); border:1px solid var(--border); border-radius:var(--r); padding:12px; box-shadow:var(--sh-sm); cursor:grab; transition:box-shadow var(--tr),transform var(--tr); position:relative; overflow:hidden; }
+.card{ background:var(--surface); border:1px solid var(--border); border-radius:var(--r); padding:7px 9px; box-shadow:var(--sh-sm); cursor:grab; transition:box-shadow var(--tr),transform var(--tr); position:relative; overflow:hidden; }
 .card:hover{ box-shadow:var(--sh-md); }
 .card.dragging{ opacity:.5; transform:rotate(2deg); }
 .card-stripe{ position:absolute; top:0; left:0; width:4px; height:100%; }
-.card-top{ display:flex; align-items:flex-start; gap:8px; margin-bottom:6px; }
-.card-title{ font-size:13px; font-weight:600; color:var(--text); flex:1; line-height:1.3; }
+.card-top{ display:flex; align-items:center; gap:6px; margin-bottom:0; }
+.card-title{ font-size:12px; font-weight:600; color:var(--text); flex:1; line-height:1.3; }
 .card-role-badge{ font-size:10px; font-weight:700; padding:2px 7px; border-radius:20px; background:var(--rm-blue-bg); color:var(--rm-blue); white-space:nowrap; flex-shrink:0; }
 .card-desc{ font-size:11.5px; color:var(--text-sec); line-height:1.4; margin-bottom:8px; }
 .card-tags{ display:flex; gap:4px; flex-wrap:wrap; margin-bottom:8px; }
@@ -172,7 +172,7 @@ body.dark .btn-ghost:hover{ background:#2a1f10; }
 .card-person{ font-size:11px; color:var(--text-mut); display:flex; align-items:center; gap:4px; }
 .avatar{ width:18px; height:18px; border-radius:50%; background:var(--rm-blue); color:#fff; font-size:9px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
 .card-actions{ display:flex; gap:4px; }
-.card-btn{ width:22px; height:22px; border-radius:4px; border:1px solid var(--border); background:transparent; color:var(--text-sec); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:11px; transition:all var(--tr); }
+.card-btn{ width:18px; height:18px; border-radius:4px; border:1px solid var(--border); background:transparent; color:var(--text-sec); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:11px; transition:all var(--tr); }
 .card-btn:hover{ background:var(--surface-alt); color:var(--text); }
 .card-btn.del:hover{ background:#fef2f2; color:var(--red); border-color:var(--red); }
 .col-new{ min-width:160px; width:160px; border:2px dashed var(--border); border-radius:var(--rl); display:flex; align-items:center; justify-content:center; padding:40px 20px; cursor:pointer; transition:all var(--tr); color:var(--text-mut); font-size:13px; flex-shrink:0; flex-direction:column; gap:8px; }
