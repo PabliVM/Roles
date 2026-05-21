@@ -207,10 +207,15 @@ body.dark .btn-ghost:hover{ background:#2a1f10; }
 .form-textarea{ resize:vertical; min-height:80px; }
 .form-row{ display:flex; gap:10px; }
 .form-row .form-group{ flex:1; }
-.color-grid{ display:flex; gap:7px; flex-wrap:wrap; }
-.color-swatch{ width:28px; height:28px; border-radius:6px; cursor:pointer; border:2px solid transparent; transition:all var(--tr); }
-.color-swatch.selected{ border-color:#1a1d23; transform:scale(1.15); }
-body.dark .color-swatch.selected{ border-color:#fff; }
+.color-grid{ display:flex; gap:5px; flex-wrap:wrap; align-items:center; }
+.color-swatch{ width:22px; height:22px; border-radius:5px; cursor:pointer; border:2px solid transparent; transition:all var(--tr); flex-shrink:0; }
+.color-swatch:hover{ transform:scale(1.15); }
+.color-swatch.selected{ border-color:#1a1d23; transform:scale(1.2); box-shadow:0 0 0 2px #fff,0 0 0 4px #1a1d23; }
+body.dark .color-swatch.selected{ border-color:#fff; box-shadow:0 0 0 2px #23272f,0 0 0 4px #fff; }
+.color-custom-row{ display:flex; align-items:center; gap:8px; margin-top:6px; width:100%; }
+.color-hex-input{ flex:1; padding:5px 8px; border-radius:6px; border:1px solid var(--border); background:var(--surface-alt); color:var(--text); font-size:12px; font-family:monospace; }
+.color-hex-input:focus{ outline:none; border-color:var(--rm-blue); }
+.color-hex-preview{ width:28px; height:28px; border-radius:6px; border:2px solid var(--border); flex-shrink:0; cursor:pointer; transition:all var(--tr); }
 
 /* === PANEL CONFIGURACIÓN (slide-in) === */
 .panel-overlay{ display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:600; }
@@ -580,7 +585,20 @@ let db = null;
 // =====================================================
 // STATE — keyed by seasonId
 // =====================================================
-const COLORS = ["#2563eb","#7c3aed","#db2777","#dc2626","#ea580c","#d97706","#16a34a","#0891b2","#475569","#64748b"];
+const COLORS = [
+  // Rojos / Rosas
+  "#dc2626","#ef4444","#f87171","#db2777","#ec4899","#f472b6",
+  // Naranjas / Amarillos
+  "#ea580c","#f97316","#fb923c","#d97706","#f59e0b","#fbbf24",
+  // Verdes
+  "#16a34a","#22c55e","#4ade80","#059669","#10b981","#34d399",
+  // Azules / Cielos
+  "#2563eb","#3b82f6","#60a5fa","#0891b2","#06b6d4","#67e8f9",
+  // Morados / Violetas
+  "#7c3aed","#8b5cf6","#a78bfa","#6d28d9","#9333ea","#c084fc",
+  // Grises / Neutros
+  "#1e293b","#475569","#64748b","#94a3b8","#cbd5e1","#78716c",
+];
 
 // Global state container
 // state.seasons = [{id,name,order}]
@@ -1589,28 +1607,77 @@ window.deleteMaestro=async function(type,id){
 // =====================================================
 // COLOR GRID
 // =====================================================
+function getSelectedColor(type){ return type==='card'?selectedColor:type==='col'?selectedColColor:selectedBoardColor; }
+function setSelectedColor(type,c){ if(type==='card')selectedColor=c;else if(type==='col')selectedColColor=c;else selectedBoardColor=c; }
+
 function renderColorGrid(gridId,type){
   const grid=document.getElementById(gridId); grid.innerHTML='';
-  const sel=type==='card'?selectedColor:type==='col'?selectedColColor:selectedBoardColor;
+  const sel=getSelectedColor(type);
   COLORS.forEach(c=>{
     const sw=document.createElement('div');
     sw.className='color-swatch'+(c===sel?' selected':'');
     sw.style.background=c;
-    sw.onclick=()=>{if(type==='card')selectedColor=c;else if(type==='col')selectedColColor=c;else selectedBoardColor=c;renderColorGrid(gridId,type);};
+    sw.title=c;
+    sw.onclick=()=>{ setSelectedColor(type,c); renderColorGrid(gridId,type); };
     grid.appendChild(sw);
   });
+  // Custom hex row
+  const row=document.createElement('div');
+  row.className='color-custom-row';
+  const preview=document.createElement('div');
+  preview.className='color-hex-preview';
+  preview.style.background=sel;
+  preview.title='Color actual';
+  const input=document.createElement('input');
+  input.className='color-hex-input';
+  input.type='text';
+  input.maxLength=7;
+  input.placeholder='#rrggbb';
+  input.value=sel;
+  input.oninput=()=>{
+    const v=input.value.trim();
+    if(/^#[0-9a-fA-F]{6}$/.test(v)){
+      preview.style.background=v;
+      setSelectedColor(type,v);
+      // Deselect palette swatches
+      grid.querySelectorAll('.color-swatch').forEach(s=>s.classList.remove('selected'));
+    }
+  };
+  // Native color picker trigger
+  const picker=document.createElement('input');
+  picker.type='color';
+  picker.value=sel;
+  picker.style.cssText='width:28px;height:28px;border:none;padding:0;cursor:pointer;border-radius:5px;overflow:hidden;flex-shrink:0;';
+  picker.title='Selector de color';
+  picker.oninput=()=>{
+    const v=picker.value;
+    input.value=v;
+    preview.style.background=v;
+    setSelectedColor(type,v);
+    grid.querySelectorAll('.color-swatch').forEach(s=>s.classList.remove('selected'));
+  };
+  row.appendChild(preview);
+  row.appendChild(input);
+  row.appendChild(picker);
+  grid.appendChild(row);
 }
 
 function initTagColorMini(){
   const wrap=document.getElementById('tagColorMini'); if(!wrap)return;
   wrap.innerHTML='';
-  COLORS.forEach(c=>{
+  COLORS.slice(0,18).forEach(c=>{
     const sw=document.createElement('div');
     sw.className='mini-sw'+(c===selectedTagColor?' sel':'');
     sw.style.background=c;
     sw.onclick=()=>{selectedTagColor=c;initTagColorMini();};
     wrap.appendChild(sw);
   });
+  // Native color picker for tags too
+  const picker=document.createElement('input');
+  picker.type='color'; picker.value=selectedTagColor;
+  picker.style.cssText='width:20px;height:20px;border:none;padding:0;cursor:pointer;border-radius:4px;flex-shrink:0;';
+  picker.oninput=()=>{ selectedTagColor=picker.value; initTagColorMini(); };
+  wrap.appendChild(picker);
 }
 
 // =====================================================
