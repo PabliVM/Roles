@@ -280,8 +280,8 @@ body.dark .inline-confirm-banner{ background:#2a1010 !important; }
 .column.col-drag-over{ outline:2px dashed var(--rm-blue); border-radius:var(--rl); background:var(--rm-blue-bg); }
 .board-card.board-dragging{ opacity:.4; transform:rotate(1deg); }
 .board-card.board-drag-over{ outline:2px dashed var(--rm-blue); transform:translateY(-4px); }
-.col-header{ cursor:grab; }
-.col-header:active{ cursor:grabbing; }
+.col-drag-handle{ cursor:grab; }
+.col-drag-handle:active{ cursor:grabbing; }
 .col-drag-handle{ font-size:14px; color:var(--text-faint); cursor:grab; padding:0 4px; }
 .col-drag-handle:hover{ color:var(--text-sec); }
 
@@ -881,7 +881,7 @@ function renderBoard() {
     const colCards = filtered.filter(c=>c.columnId===col.id).sort((a,b)=>(a.order||0)-(b.order||0));
     const colEl = document.createElement('div');
     colEl.className = 'column';
-    colEl.draggable = true;
+    colEl.draggable = false;
     colEl.dataset.colId = col.id;
     colEl.ondragstart = e => onColDragStart(e, col.id);
     colEl.ondragend = onColDragEnd;
@@ -906,6 +906,12 @@ function renderBoard() {
         ondrop="onCardDrop(event,'${col.id}')">
         ${colCards.length?'':'<div class="empty-state"><div class="empty-state-icon">📋</div><div class="empty-state-text">Sin fichas</div></div>'}
       </div>`;
+    const handle = colEl.querySelector('.col-drag-handle');
+    if (handle) {
+      handle.addEventListener('mousedown', () => { colEl.draggable = true; });
+      handle.addEventListener('mouseup', () => { colEl.draggable = false; });
+      colEl.addEventListener('dragend', () => { colEl.draggable = false; });
+    }
     const zone = colEl.querySelector('.drop-zone');
     colCards.forEach(card => zone.appendChild(buildCard(card, col.color)));
     board.appendChild(colEl);
