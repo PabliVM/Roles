@@ -397,8 +397,8 @@ body.dark .inline-confirm-banner{ background:#2a1010 !important; }
         </div>
       </div>
       <div class="form-group">
-        <label class="form-label">Responsable</label>
-        <select class="form-select" id="fPerson"><option value="">Sin asignar</option></select>
+        <label class="form-label">Responsables</label>
+        <div id="personCheckboxes" style="display:flex;flex-wrap:wrap;gap:6px;padding:4px 0;min-height:32px"></div>
       </div>
       <div class="form-group">
         <label class="form-label">Descripción</label>
@@ -609,6 +609,7 @@ let activeBoard  = null;  // board object
 let editingCardId = null, editingColId = null, editingBoardId = null;
 let selectedColor = COLORS[0], selectedColColor = COLORS[6], selectedBoardColor = COLORS[0], selectedTagColor = COLORS[8];
 let selectedCardTags = [];
+let selectedCardPersons = [];
 let deleteTarget = null;
 let currentView = 'board';
 let searchQuery = '', filterArea = '', filterRole = '', filterPerson = '', filterTag = '';
@@ -857,10 +858,10 @@ function getBoardCards() {
 function getFilteredCards() {
   return getBoardCards().filter(c => {
     const q = searchQuery.toLowerCase();
-    if (q && ![c.title,c.desc,c.person,c.role,...(c.tags||[])].some(x=>(x||'').toLowerCase().includes(q))) return false;
+    if (q && ![c.title,c.desc,c.person,c.role,...(c.persons||[]),...(c.tags||[])].some(x=>(x||'').toLowerCase().includes(q))) return false;
     if (filterArea   && c.columnId !== filterArea) return false;
     if (filterRole   && (c.role||'') !== filterRole) return false;
-    if (filterPerson && (c.person||'') !== filterPerson) return false;
+    if (filterPerson && !((c.persons&&c.persons.includes(filterPerson)) || c.person===filterPerson)) return false;
     if (filterTag    && !(c.tags||[]).includes(filterTag)) return false;
     return true;
   });
@@ -922,7 +923,7 @@ function buildCard(card, colColor) {
   el.ondragover = e => onCardDragOverCard(e, card.id);
   el.ondragleave = e => onCardDragLeaveCard(e);
   const color = colColor||card.color||COLORS[0]; // column color takes priority for visual
-  const initials = (card.person||'?').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
+
   const data = sd();
   const tags = (card.tags||[]).map(t => {
     const td = data.tags.find(x=>x.name===t);
@@ -938,7 +939,7 @@ function buildCard(card, colColor) {
     ${card.role?`<div style="margin-top:3px"><span class="card-role-badge">${esc(card.role)}</span></div>`:''}
     ${card.desc?`<div class="card-desc">${esc(card.desc)}</div>`:''}
     ${tags?`<div class="card-tags">${tags}</div>`:''}
-    ${card.person?`<div class="card-person" style="margin-top:4px"><div class="avatar" style="background:${color}">${initials}</div>${esc(card.person)}</div>`:''}`;
+    ${(card.persons&&card.persons.length)?`<div class="card-person" style="margin-top:4px">${card.persons.map((p,i)=>i===0?`<strong style="font-weight:700">${esc(p)}</strong>`:esc(p)).join(' - ')}</div>`:(card.person?`<div class="card-person" style="margin-top:4px"><strong style="font-weight:700">${esc(card.person)}</strong></div>`:'')}`;
   return el;
 }
 
@@ -956,7 +957,7 @@ function renderList() {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td><span class="list-stripe" style="background:${color}"></span><strong>${esc(card.title)}</strong></td>
-      <td>${esc(col.name||'—')}</td><td>${esc(card.role||'—')}</td><td>${esc(card.person||'—')}</td>
+      <td>${esc(col.name||'—')}</td><td>${esc(card.role||'—')}</td><td>${(card.persons&&card.persons.length)?card.persons.join(' - '):(card.person||'—')}</td>
       <td>${tags||'<span style="color:var(--text-mut)">—</span>'}</td>
       <td><button class="card-btn" onclick="openCardModal(null,'${card.id}')">✏️</button></td>`;
     tbody.appendChild(tr);
@@ -990,7 +991,7 @@ function updateFilters() {
   // Populate card modal selects
   const fArea=document.getElementById('fArea'); if(fArea){const fav=fArea.value;fArea.innerHTML='';boardCols.forEach(c=>fArea.innerHTML+=`<option value="${c.id}">${esc(c.name)}</option>`);if(fav)fArea.value=fav;}
   const fRole=document.getElementById('fRole'); if(fRole){const frv=fRole.value;fRole.innerHTML='<option value="">Sin rol</option>';data.roles.forEach(r=>fRole.innerHTML+=`<option value="${r.name}">${esc(r.name)}</option>`);if(frv)fRole.value=frv;}
-  const fPerson=document.getElementById('fPerson'); if(fPerson){const fpv=fPerson.value;fPerson.innerHTML='<option value="">Sin asignar</option>';data.persons.forEach(p=>fPerson.innerHTML+=`<option value="${p.name}">${esc(p.name)}</option>`);if(fpv)fPerson.value=fpv;}
+
 }
 
 // =====================================================
@@ -1157,14 +1158,14 @@ window.openCardModal = function(colId=null, cardId=null) {
     document.getElementById('fDesc').value=card.desc||'';
     document.getElementById('fArea').value=card.columnId||'';
     document.getElementById('fRole').value=card.role||'';
-    document.getElementById('fPerson').value=card.person||'';
+    selectedCardPersons = card.persons ? [...card.persons] : (card.person ? [card.person] : []);
     selectedCardTags=[...(card.tags||[])];
     // Color: saved card color, fallback to its column color
     const col=sd().columns.find(c=>c.id===card.columnId);
     selectedColor=card.color||(col?.color||COLORS[0]);
   } else {
     ['fTitle','fDesc'].forEach(id=>document.getElementById(id).value='');
-    document.getElementById('fRole').value=''; document.getElementById('fPerson').value='';
+    document.getElementById('fRole').value=''; selectedCardPersons=[];
     if(colId){
       document.getElementById('fArea').value=colId;
       // Default color = column color
@@ -1174,7 +1175,7 @@ window.openCardModal = function(colId=null, cardId=null) {
       selectedColor=COLORS[0];
     }
   }
-  renderTagCheckboxes(); renderColorGrid('colorGrid','card');
+  renderTagCheckboxes(); renderPersonCheckboxes(); renderColorGrid('colorGrid','card');
   document.getElementById('cardOverlay').classList.add('open');
   setTimeout(()=>document.getElementById('fTitle').focus(),100);
 };
@@ -1189,7 +1190,7 @@ window.saveCard=function(){
   const title=document.getElementById('fTitle').value.trim();
   if(!title){toast("El título es obligatorio","err");return;}
   const d=sd();
-  const payload={title,columnId:document.getElementById('fArea').value,role:document.getElementById('fRole').value,person:document.getElementById('fPerson').value,desc:document.getElementById('fDesc').value.trim(),tags:selectedCardTags,color:selectedColor};
+  const payload={title,columnId:document.getElementById('fArea').value,role:document.getElementById('fRole').value,persons:selectedCardPersons,person:selectedCardPersons[0]||'',desc:document.getElementById('fDesc').value.trim(),tags:selectedCardTags,color:selectedColor};
   if(editingCardId){Object.assign(d.cards.find(c=>c.id===editingCardId),payload);}
   else{d.cards.push({id:uid(),...payload});}
   closeCardModal();scheduleSave();renderKanban();
@@ -1531,7 +1532,7 @@ function renderMaestroList(type,listId){
   items.forEach(item=>{
     let count=0;
     if(type==='roles')   count=data.cards.filter(c=>c.role===item.name).length;
-    if(type==='persons') count=data.cards.filter(c=>c.person===item.name).length;
+    if(type==='persons') count=data.cards.filter(c=>(c.persons&&c.persons.includes(item.name))||c.person===item.name).length;
     if(type==='tags')    count=data.cards.filter(c=>(c.tags||[]).includes(item.name)).length;
     const div=document.createElement('div'); div.className='maestro-item';
     div.innerHTML=`
@@ -1608,7 +1609,7 @@ window.deleteMaestro=async function(type,id){
   const d=sd(); const item=d[type].find(x=>x.id===id); if(!item)return;
   let inUse=0;
   if(type==='roles')   inUse=d.cards.filter(c=>c.role===item.name).length;
-  if(type==='persons') inUse=d.cards.filter(c=>c.person===item.name).length;
+  if(type==='persons') inUse=d.cards.filter(c=>(c.persons&&c.persons.includes(item.name))||c.person===item.name).length;
   if(type==='tags')    inUse=d.cards.filter(c=>(c.tags||[]).includes(item.name)).length;
   if(inUse>0){toast(`En uso en ${inUse} ficha${inUse!==1?'s':''}. Edítalas primero.`,"err");return;}
   try {
