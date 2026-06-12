@@ -1254,18 +1254,19 @@ function renderPersonCheckboxes(){
     const pill=document.createElement('div');
     pill.className='tag-pill';
     pill.style.cssText=`background:${sel?(isPrimary?'var(--rm-blue)':'var(--rm-blue-bg)'):'var(--surface-alt)'};color:${sel?(isPrimary?'#fff':'var(--rm-blue)'):'var(--text-sec)'};border-color:${sel?'var(--rm-blue)':'var(--border)'};font-weight:${sel?'700':'500'};gap:5px`;
-    pill.innerHTML=`${sel&&selectedCardPersons.length>1?`<span class="primary-star" title="Marcar como principal" style="cursor:pointer;opacity:${isPrimary?'1':'.4'}">${isPrimary?'⭐':'☆'}</span>`:(sel?'✓ ':'')}${esc(p.name)}`;
-    pill.onclick=(e)=>{
-      const star=e.target.closest('.primary-star');
-      if(star && sel){
+    pill.title=sel&&selectedCardPersons.length>1?'Doble clic para marcar como principal':'';
+    pill.innerHTML=`${sel&&selectedCardPersons.length>1?(isPrimary?'⭐ ':''):(sel?'✓ ':'')}${esc(p.name)}`;
+    pill.onclick=()=>{
+      if(sel) selectedCardPersons=selectedCardPersons.filter(x=>x!==p.name);
+      else selectedCardPersons.push(p.name);
+      renderPersonCheckboxes();
+    };
+    pill.ondblclick=()=>{
+      if(sel){
         // Set as primary: move to front
         selectedCardPersons=[p.name, ...selectedCardPersons.filter(x=>x!==p.name)];
-      } else if(sel){
-        selectedCardPersons=selectedCardPersons.filter(x=>x!==p.name);
-      } else {
-        selectedCardPersons.push(p.name);
+        renderPersonCheckboxes();
       }
-      renderPersonCheckboxes();
     };
     wrap.appendChild(pill);
   });
