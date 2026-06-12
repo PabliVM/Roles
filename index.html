@@ -1806,6 +1806,19 @@ function toast(msg,type='info'){
   t.className=`toast ${type}`;t.textContent=msg;
   wrap.appendChild(t);setTimeout(()=>t.remove(),3000);
 }
+
+// Visible JS error catcher (no F12 needed)
+window.addEventListener('error', (ev) => {
+  const wrap=document.getElementById('toastWrap');
+  if(!wrap) { alert('JS ERROR: '+ev.message+' @ '+ev.filename+':'+ev.lineno); return; }
+  const t=document.createElement('div');
+  t.className='toast err';
+  t.style.maxWidth='420px';
+  t.style.userSelect='text';
+  t.textContent='⚠ JS ERROR: '+ev.message+' (línea '+ev.lineno+')';
+  wrap.appendChild(t);
+  setTimeout(()=>t.remove(),15000);
+});
 function setSaveDot(st,label){
   document.getElementById('saveDot').className='save-dot'+(st!=='ok'?' '+st:'');
   document.getElementById('saveLabel').textContent=label;
