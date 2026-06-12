@@ -1242,13 +1242,31 @@ function renderPersonCheckboxes(){
   const wrap=document.getElementById('personCheckboxes'); wrap.innerHTML='';
   const data=sd();
   if(!data.persons.length){wrap.innerHTML='<span style="color:var(--text-mut);font-size:12px">Añade responsables en ⚙ Configuración</span>';return;}
+  if(selectedCardPersons.length>1){
+    const hint=document.createElement('div');
+    hint.style.cssText='font-size:11px;color:var(--text-mut);width:100%;margin-bottom:2px';
+    hint.textContent='⭐ Marca quién es el responsable principal (aparecerá en negrita)';
+    wrap.appendChild(hint);
+  }
   data.persons.forEach(p=>{
     const sel=selectedCardPersons.includes(p.name);
+    const isPrimary=selectedCardPersons[0]===p.name;
     const pill=document.createElement('div');
     pill.className='tag-pill';
-    pill.style.cssText=`background:${sel?'var(--rm-blue-bg)':'var(--surface-alt)'};color:${sel?'var(--rm-blue)':'var(--text-sec)'};border-color:${sel?'var(--rm-blue)':'var(--border)'};font-weight:${sel?'700':'500'}`;
-    pill.innerHTML=`${sel?'✓ ':''}${esc(p.name)}`;
-    pill.onclick=()=>{if(sel)selectedCardPersons=selectedCardPersons.filter(x=>x!==p.name);else selectedCardPersons.push(p.name);renderPersonCheckboxes();};
+    pill.style.cssText=`background:${sel?(isPrimary?'var(--rm-blue)':'var(--rm-blue-bg)'):'var(--surface-alt)'};color:${sel?(isPrimary?'#fff':'var(--rm-blue)'):'var(--text-sec)'};border-color:${sel?'var(--rm-blue)':'var(--border)'};font-weight:${sel?'700':'500'};gap:5px`;
+    pill.innerHTML=`${sel&&selectedCardPersons.length>1?`<span class="primary-star" title="Marcar como principal" style="cursor:pointer;opacity:${isPrimary?'1':'.4'}">${isPrimary?'⭐':'☆'}</span>`:(sel?'✓ ':'')}${esc(p.name)}`;
+    pill.onclick=(e)=>{
+      const star=e.target.closest('.primary-star');
+      if(star && sel){
+        // Set as primary: move to front
+        selectedCardPersons=[p.name, ...selectedCardPersons.filter(x=>x!==p.name)];
+      } else if(sel){
+        selectedCardPersons=selectedCardPersons.filter(x=>x!==p.name);
+      } else {
+        selectedCardPersons.push(p.name);
+      }
+      renderPersonCheckboxes();
+    };
     wrap.appendChild(pill);
   });
 }
