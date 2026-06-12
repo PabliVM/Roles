@@ -1238,6 +1238,21 @@ function renderTagCheckboxes(){
   });
 }
 
+function renderPersonCheckboxes(){
+  const wrap=document.getElementById('personCheckboxes'); wrap.innerHTML='';
+  const data=sd();
+  if(!data.persons.length){wrap.innerHTML='<span style="color:var(--text-mut);font-size:12px">Añade responsables en ⚙ Configuración</span>';return;}
+  data.persons.forEach(p=>{
+    const sel=selectedCardPersons.includes(p.name);
+    const pill=document.createElement('div');
+    pill.className='tag-pill';
+    pill.style.cssText=`background:${sel?'var(--rm-blue-bg)':'var(--surface-alt)'};color:${sel?'var(--rm-blue)':'var(--text-sec)'};border-color:${sel?'var(--rm-blue)':'var(--border)'};font-weight:${sel?'700':'500'}`;
+    pill.innerHTML=`${sel?'✓ ':''}${esc(p.name)}`;
+    pill.onclick=()=>{if(sel)selectedCardPersons=selectedCardPersons.filter(x=>x!==p.name);else selectedCardPersons.push(p.name);renderPersonCheckboxes();};
+    wrap.appendChild(pill);
+  });
+}
+
 // =====================================================
 // COLUMN MODAL
 // =====================================================
