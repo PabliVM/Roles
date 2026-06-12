@@ -162,7 +162,8 @@ body.dark .btn-ghost:hover{ background:#2a1f10; }
 .card:hover{ box-shadow:var(--sh-md); }
 .card.dragging{ opacity:.5; transform:rotate(2deg); }
 .card-stripe{ position:absolute; top:0; left:0; width:4px; height:100%; }
-.card-top{ display:flex; align-items:center; gap:6px; margin-bottom:0; }
+.card-top{ display:flex; align-items:flex-start; gap:6px; margin-bottom:0; }
+.card-top .card-btn{ margin-top:0; }
 .card-title{ font-size:12px; font-weight:400; color:var(--text); flex:1; line-height:1.3; }
 .card-role-badge{ font-size:10px; font-weight:700; padding:2px 7px; border-radius:20px; background:var(--rm-blue-bg); color:var(--rm-blue); white-space:nowrap; flex-shrink:0; }
 .card-desc{ font-size:11.5px; color:var(--text-sec); line-height:1.4; margin-bottom:8px; }
@@ -233,7 +234,9 @@ body.dark .color-swatch.selected{ border-color:#fff; box-shadow:0 0 0 2px #23272
 .maestro-name{ flex:1; font-size:13px; font-weight:500; color:var(--text); }
 .maestro-sub{ font-size:11px; color:var(--text-mut); margin-left:4px; }
 .maestro-count{ font-size:11px; color:var(--text-mut); background:var(--bg); padding:2px 7px; border-radius:20px; }
-.maestro-del{ width:20px; height:20px; border:none; background:transparent; cursor:pointer; color:var(--text-mut); font-size:14px; display:flex; align-items:center; justify-content:center; border-radius:4px; transition:all var(--tr); }
+.maestro-del{ width:20px; height:20px; border:none; background:transparent; cursor:pointer; color:var(--text-mut); font-size:14px; display:flex; align-items:center; justify-content:center; border-radius:4px; transition:all var(--tr); flex-shrink:0; }
+.maestro-edit{ width:20px; height:20px; border:none; background:transparent; cursor:pointer; font-size:12px; display:flex; align-items:center; justify-content:center; border-radius:4px; transition:all var(--tr); flex-shrink:0; opacity:.6; }
+.maestro-edit:hover{ opacity:1; background:var(--surface); }
 .maestro-del:hover{ color:var(--red); background:#fef2f2; }
 .add-row{ display:flex; gap:8px; align-items:center; }
 .add-row .form-input{ flex:1; padding:7px 10px; font-size:12.5px; }
@@ -934,7 +937,7 @@ function buildCard(card, colColor) {
     <div class="card-stripe" style="background:${color}"></div>
     <div class="card-top">
       <div class="card-title">${esc(card.title)}</div>
-      <button class="card-btn" onclick="openCardModal(null,'${card.id}')" style="flex-shrink:0">✏️</button>
+      <button class="card-btn" onclick="openCardModal(null,'${card.id}')" style="flex-shrink:0;position:relative;z-index:5;pointer-events:auto">✏️</button>
     </div>
     ${card.role?`<div style="margin-top:3px"><span class="card-role-badge">${esc(card.role)}</span></div>`:''}
     ${card.desc?`<div class="card-desc">${esc(card.desc)}</div>`:''}
@@ -1534,15 +1537,74 @@ function renderMaestroList(type,listId){
     if(type==='roles')   count=data.cards.filter(c=>c.role===item.name).length;
     if(type==='persons') count=data.cards.filter(c=>(c.persons&&c.persons.includes(item.name))||c.person===item.name).length;
     if(type==='tags')    count=data.cards.filter(c=>(c.tags||[]).includes(item.name)).length;
-    const div=document.createElement('div'); div.className='maestro-item';
+    const div=document.createElement('div'); div.className='maestro-item'; div.dataset.id=item.id; div.dataset.type=type;
     div.innerHTML=`
       <div class="maestro-dot" style="background:${item.color||'var(--rm-blue)'}"></div>
-      <div class="maestro-name">${esc(item.name)}${type==='persons'&&item.role?`<span class="maestro-sub">${esc(item.role)}</span>`:''}</div>
+      <div class="maestro-name maestro-name-display">${esc(item.name)}${type==='persons'&&item.role?`<span class="maestro-sub">${esc(item.role)}</span>`:''}</div>
       <span class="maestro-count">${count} ficha${count!==1?'s':''}</span>
+      <button class="maestro-edit" onclick="startEditMaestro('${type}','${item.id}')" title="Editar">✏️</button>
       <button class="maestro-del" onclick="deleteMaestro('${type}','${item.id}')">×</button>`;
     list.appendChild(div);
   });
 }
+
+window.startEditMaestro = function(type, id) {
+  const data = sd();
+  const item = data[type].find(x=>x.id===id);
+  if (!item) return;
+  const div = document.querySelector(`.maestro-item[data-id="${id}"][data-type="${type}"]`);
+  if (!div) return;
+
+  const isPerson = type === 'persons';
+  div.innerHTML = `
+    <div class="maestro-dot" style="background:${item.color||'var(--rm-blue)'}"></div>
+    <input class="form-input" id="editName-${id}" value="${esc(item.name)}" style="flex:1;padding:5px 8px;font-size:12.5px" onkeydown="if(event.key==='Enter')saveEditMaestro('${type}','${id}')">
+    ${isPerson ? `<input class="form-input" id="editRole-${id}" value="${esc(item.role||'')}" placeholder="Rol" style="width:110px;padding:5px 8px;font-size:12.5px" onkeydown="if(event.key==='Enter')saveEditMaestro('${type}','${id}')">` : ''}
+    <button class="maestro-del" style="color:var(--green)" onclick="saveEditMaestro('${type}','${id}')" title="Guardar">✓</button>
+    <button class="maestro-del" onclick="renderMaestroList('${type}','${type==='roles'?'roleList':type==='persons'?'personList':'tagList'}')" title="Cancelar">×</button>`;
+  document.getElementById(`editName-${id}`).focus();
+  document.getElementById(`editName-${id}`).select();
+};
+
+window.saveEditMaestro = async function(type, id) {
+  const data = sd();
+  const item = data[type].find(x=>x.id===id);
+  if (!item) return;
+  const nameInput = document.getElementById(`editName-${id}`);
+  const newName = nameInput.value.trim();
+  if (!newName) { toast("El nombre no puede estar vacío","err"); return; }
+
+  const oldName = item.name;
+  // Check for duplicates (excluding self)
+  if (data[type].some(x=>x.id!==id && x.name.toLowerCase()===newName.toLowerCase())) {
+    toast("Ya existe ese nombre","err"); return;
+  }
+
+  item.name = newName;
+  if (type === 'persons') {
+    const roleInput = document.getElementById(`editRole-${id}`);
+    item.role = roleInput ? roleInput.value.trim() : item.role;
+  }
+
+  // Cascade rename across cards if name changed
+  if (oldName !== newName) {
+    if (type === 'roles') {
+      data.cards.forEach(c => { if (c.role === oldName) c.role = newName; });
+    } else if (type === 'persons') {
+      data.cards.forEach(c => {
+        if (c.person === oldName) c.person = newName;
+        if (c.persons) c.persons = c.persons.map(p => p===oldName ? newName : p);
+      });
+    } else if (type === 'tags') {
+      data.cards.forEach(c => { if (c.tags) c.tags = c.tags.map(t => t===oldName ? newName : t); });
+    }
+  }
+
+  renderMaestroList(type, type==='roles'?'roleList':type==='persons'?'personList':'tagList');
+  if (activeBoard) { renderKanban(); }
+  scheduleSave();
+  toast("✅ Actualizado","ok");
+};
 
 function renderSeasonList(){
   const list=document.getElementById('seasonList'); if(!list)return;
