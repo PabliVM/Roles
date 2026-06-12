@@ -886,33 +886,45 @@ function renderBoard() {
     colEl.ondragstart = e => onColDragStart(e, col.id);
     colEl.ondragend = onColDragEnd;
     colEl.innerHTML = `
-      <div class="col-header"
-           ondragover="onColDragOver(event,'${col.id}')"
-           ondragleave="onColDragLeave(event)"
-           ondrop="onColDrop(event,'${col.id}')">
+      <div class="col-header">
         <div class="col-title">
           <span class="col-drag-handle" title="Arrastrar para mover">⠿</span>
           <span class="col-dot" style="background:${col.color}"></span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block">${esc(col.name)}</span>
         </div>
         <div style="display:flex;gap:5px;align-items:center">
           <span class="col-count">${colCards.length}</span>
-          <button class="col-add" onclick="openCardModal('${col.id}')">＋</button>
-          <button class="card-btn" onclick="openColModal('${col.id}')">✏️</button>
+          <button type="button" class="col-add">＋</button>
+          <button type="button" class="card-btn">✏️</button>
         </div>
       </div>
-      <div class="drop-zone" id="zone-${col.id}"
-        ondragover="onCardDragOver(event,'${col.id}')"
-        ondragleave="onDragLeave(event)"
-        ondrop="onCardDrop(event,'${col.id}')">
+      <div class="drop-zone" id="zone-${col.id}">
         ${colCards.length?'':'<div class="empty-state"><div class="empty-state-icon">📋</div><div class="empty-state-text">Sin fichas</div></div>'}
       </div>`;
+
+    // Wire up events via JS (module scope — inline on* attrs can't reach module functions)
+    const header = colEl.querySelector('.col-header');
+    const zone = colEl.querySelector('.drop-zone');
     const handle = colEl.querySelector('.col-drag-handle');
+    const addBtn = colEl.querySelector('.col-add');
+    const editBtn = colEl.querySelector('.card-btn');
+
+    addBtn.addEventListener('click', (e) => { e.stopPropagation(); openCardModal(col.id); });
+    editBtn.addEventListener('click', (e) => { e.stopPropagation(); openColModal(col.id); });
+
+    header.addEventListener('dragover', e => onColDragOver(e, col.id));
+    header.addEventListener('dragleave', e => onColDragLeave(e));
+    header.addEventListener('drop', e => onColDrop(e, col.id));
+
+    zone.addEventListener('dragover', e => onCardDragOver(e, col.id));
+    zone.addEventListener('dragleave', e => onDragLeave(e));
+    zone.addEventListener('drop', e => onCardDrop(e, col.id));
+
     if (handle) {
       handle.addEventListener('mousedown', () => { colEl.draggable = true; });
       handle.addEventListener('mouseup', () => { colEl.draggable = false; });
       colEl.addEventListener('dragend', () => { colEl.draggable = false; });
     }
-    const zone = colEl.querySelector('.drop-zone');
+
     colCards.forEach(card => zone.appendChild(buildCard(card, col.color)));
     board.appendChild(colEl);
   });
